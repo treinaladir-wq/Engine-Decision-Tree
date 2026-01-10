@@ -53,6 +53,30 @@ with tab2:
         st.success("Acesso liberado!")
         arquivo = st.file_uploader("Suba a imagem do fluxograma", type=["png", "jpg", "jpeg"])
         if arquivo and st.button("🤖 Processar com IA"):
+            with st.spinner("Lendo imagem e gerando lógica..."):
+                try:
+                    # 1. PREPARAÇÃO DA IMAGEM (A correção do erro está aqui)
+                    bytes_data = arquivo.getvalue()
+                    image_parts = [{"mime_type": arquivo.type, "data": bytes_data}]
+                    
+                    # 2. PROMPT REFORÇADO
+                    prompt = """Analise este fluxograma e transforme em JSON. 
+                    Retorne ESTRITAMENTE o código JSON puro, sem textos extras ou explicações.
+                    Formato: [{"id": "nome", "pergunta": "texto", "opcoes": {"Botão": "id_destino"}}]"""
+                    
+                    # 3. CHAMADA DA IA
+                    resposta = model.generate_content([prompt, image_parts[0]])
+                    
+                    # 4. LIMPEZA E SALVAMENTO
+                    texto_ia = resposta.text.replace('```json', '').replace('```', '').strip()
+                    dados_ia = json.loads(texto_ia)
+                    
+                    for item in dados_ia:
+                        supabase.table("fluxos").upsert(item).execute()
+                        
+                    st.success("✅ Fluxograma carregado com sucesso!")
+                except Exception as e:
+                    st.error(f"Erro detalhado: {e}")
             with st.spinner("Lendo imagem..."):
                 resposta = model.generate_content(["Transforme este fluxograma em um JSON (lista de objetos com 'id', 'pergunta', 'opcoes' como dicionário texto:id_destino). Retorne apenas o JSON puro.", arquivo])
                 limpo = resposta.text.replace('```json', '').replace('```', '').strip()
