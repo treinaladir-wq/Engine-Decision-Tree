@@ -27,11 +27,9 @@ try:
     url = st.secrets["SUPABASE_URL"]
     key = st.secrets["SUPABASE_KEY"]
     gemini_key = st.secrets["GEMINI_KEY"]
-    admin_pw = st.secrets["ADMIN_PASSWORD"]
+    admin_pw = st.secrets["ADMIN_PASSWORD"] # <--- AQUI ESTÁ SUA SENHA DOS SECRETS
 
     supabase = create_client(url, key)
-    
-    # Configuração da IA
     genai.configure(api_key=gemini_key)
     model = genai.GenerativeModel('gemini-1.5-flash')
 except Exception as e:
@@ -65,32 +63,46 @@ with tab1:
                 if st.button("⬅️ Reiniciar"):
                     st.session_state.step = res.data[0]['id']
                     st.rerun()
-    except: st.write("Aguardando dados...")
+    except: st.write("Aguardando inicialização do banco...")
 
 with tab2:
     st.subheader("🔐 Área Restrita")
-    senha = st.text_input("Senha", type="password")
-    if senha == admin_pw:
-        st.success("Acesso Liberado")
+    # CAMPO DE SENHA QUE BLOQUEIA O ACESSO
+    senha_digitada = st.text_input("Senha do Administrador", type="password")
+    
+    if senha_digitada == admin_pw:
+        st.success("Acesso Liberado!")
+        st.divider()
+        
         arquivo = st.file_uploader("Suba a imagem do fluxograma", type=["png", "jpg", "jpeg"])
         if arquivo and st.button("🤖 Processar com IA"):
             with st.spinner("Analisando imagem..."):
                 try:
-                    # Preparando a imagem em bytes
                     img_data = arquivo.getvalue()
                     img_parts = {"mime_type": arquivo.type, "data": img_data}
                     
-                    prompt = "Converta este fluxograma em um JSON (lista de objetos com 'id', 'pergunta' e 'opcoes' como dicionário texto:id_destino). Retorne apenas o JSON puro."
+                    prompt = "Converta este fluxograma em um JSON (lista de objetos com 'id', 'pergunta' e 'opcoes' como dicionário texto:id_destino). Retorne apenas o JSON puro, sem marcações markdown."
                     
-                    # Chamada explícita
                     response = model.generate_content([prompt, img_parts])
                     
+                    # Limpeza para garantir que o JSON seja aceito
                     clean_json = response.text.replace('```json', '').replace('```', '').strip()
                     dados = json.loads(clean_json)
                     
+                    # Limpa o fluxo antigo antes de salvar o novo
+                    supabase.table("fluxos").delete().neq("id", "0").execute()
+                    
                     for item in dados:
                         supabase.table("fluxos").upsert(item).execute()
-                    st.success("✅ Fluxo atualizado!")
+                    
+                    st.success("✅ Fluxo atualizado com sucesso!")
                     st.balloons()
                 except Exception as e:
-                    st.error(f"Erro: {e}")
+                    st.error(f"Erro ao processar: {e}")
+        
+        if st.button("🗑️ Resetar Logs de BI"):
+            supabase.table("logs").delete().neq("id", 0).execute()
+            st.warning("Histórico de cliques apagado.")
+            
+    elif senha_digitada != "":
+        st.error("Senha incorreta. Acesso negado.")
