@@ -1,115 +1,97 @@
 import streamlit as st
 import pandas as pd
-import google.generativeai as genai
 from supabase import create_client
 import json
 
-# --- 1. DESIGN DARK MODE ---
+# --- 1. CONFIGURAÇÃO DE DESIGN ---
 st.set_page_config(page_title="Engine Decision Tree", layout="wide")
 st.markdown("""
     <style>
     .stApp { background-color: #0E1117; color: #FFFFFF; }
-    .stButton>button { 
-        width: 100%; border-radius: 8px; height: 3.5em; 
-        background-color: #262730; color: white; border: 1px solid #4B4B4B; 
-    }
-    .stButton>button:hover { border-color: #FF4B4B; color: #FF4B4B; }
-    .instruction-card { 
-        background-color: #161B22; padding: 25px; border-radius: 10px; 
-        border: 1px solid #30363D; text-align: center; margin-bottom: 20px; 
-    }
+    .stButton>button { width: 100%; border-radius: 8px; height: 3.5em; background-color: #262730; color: white; border: 1px solid #4B4B4B; }
+    .stButton>button:hover { border-color: #00FFAA; color: #00FFAA; }
+    .instruction-card { background-color: #161B22; padding: 25px; border-radius: 12px; border: 1px solid #30363D; text-align: center; margin-bottom: 20px; }
     h1, h2, h3, p, label { color: #F5F5F5 !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. CONEXÕES E MODELO ---
-try:
-    # Carrega chaves dos Secrets
-    url = st.secrets["SUPABASE_URL"]
-    key = st.secrets["SUPABASE_KEY"]
-    gemini_key = st.secrets["GEMINI_KEY"]
-    admin_pw = st.secrets["ADMIN_PASSWORD"]
-
-    supabase = create_client(url, key)
-    
-    # Configuração da IA - Forçando modelo 2.0 para evitar erro 404
-    genai.configure(api_key=gemini_key)
-    model = genai.GenerativeModel('gemini-2.0-flash')
-except Exception as e:
-    st.error(f"⚠️ Erro de Configuração: {e}")
-    st.stop()
+# --- 2. CONEXÕES ---
+url = st.secrets["SUPABASE_URL"]
+key = st.secrets["SUPABASE_KEY"]
+admin_pw = st.secrets["ADMIN_PASSWORD"]
+supabase = create_client(url, key)
 
 # --- 3. INTERFACE ---
 st.title("📂 Engine Decision Tree")
-tab1, tab2 = st.tabs(["🎮 Navegação", "⚙️ Admin"])
+tab1, tab2 = st.tabs(["🎮 Navegação", "⚙️ Admin (Planilha)"])
 
 with tab1:
-    try:
-        res = supabase.table("fluxos").select("*").execute()
-        if not res.data:
-            st.info("Sistema vazio. Configure o fluxograma no Painel Admin.")
-        else:
-            fluxo = {item['id']: item for item in res.data}
-            if 'step' not in st.session_state:
-                st.session_state.step = res.data[0]['id']
+    res = supabase.table("fluxos").select("*").execute()
+    if not res.data:
+        st.info("Nenhum fluxo carregado. Vá em Admin.")
+    else:
+        # Organiza os dados. O primeiro ID da planilha será o início.
+        fluxo = {str(item['id']): item for item in res.data}
+        if 'step' not in st.session_state:
+            st.session_state.step = str(res.data[0]['id'])
+        
+        atual = fluxo.get(st.session_state.step)
+        if atual:
+            st.markdown(f"<div class='instruction-card'><h2>{atual['pergunta']}</h2></div>", unsafe_allow_html=True)
             
-            atual = fluxo.get(st.session_state.step)
-            if atual:
-                st.markdown(f"<div class='instruction-card'><h2>{atual['pergunta']}</h2></div>", unsafe_allow_html=True)
-                opcoes = atual.get('opcoes', {})
-                cols = st.columns(len(opcoes) if opcoes else 1)
-                for i, (texto, destino) in enumerate(opcoes.items()):
-                    if cols[i].button(texto):
-                        supabase.table("logs").insert({"no_nome": atual['pergunta'], "escolha": texto}).execute()
-                        st.session_state.step = destino
-                        st.rerun()
-                if st.button("⬅️ Reiniciar Fluxo"):
-                    st.session_state.step = res.data[0]['id']
+            opcoes = atual['opcoes']
+            if isinstance(opcoes, str):
+                opcoes = json.loads(opcoes)
+            
+            cols = st.columns(len(opcoes) if opcoes else 1)
+            for i, (texto, destino) in enumerate(opcoes.items()):
+                if cols[i].button(texto):
+                    # Registro para o BI
+                    supabase.table("logs").insert({"no_nome": atual['pergunta'], "escolha": texto}).execute()
+                    st.session_state.step = str(destino)
                     st.rerun()
-    except:
-        st.write("A carregar base de dados...")
+            
+            if st.button("⬅️ Reiniciar"):
+                st.session_state.step = str(res.data[0]['id'])
+                st.rerun()
 
 with tab2:
-    st.subheader("🔐 Painel de Controlo")
-    senha_inserida = st.text_input("Palavra-passe de Administrador", type="password")
+    st.subheader("🔐 Gestão de Fluxograma")
+    senha = st.text_input("Senha", type="password")
     
-    if senha_inserida == admin_pw:
-        st.success("Acesso Autorizado")
-        st.divider()
+    if senha == admin_pw:
+        st.write("### Importar Planilha")
+        st.caption("Formato esperado: ID | Pergunta | Botão 1 | botão_destino | Botão 2 | botão2_destino ...")
         
-        arquivo = st.file_uploader("Suba a imagem do fluxograma", type=["png", "jpg", "jpeg"])
+        arquivo_csv = st.file_uploader("Suba seu arquivo CSV", type=["csv"])
         
-        if arquivo and st.button("🤖 Processar com Inteligência Artificial"):
-            with st.spinner("A IA está a interpretar o fluxograma..."):
+        if arquivo_csv:
+            df = pd.read_csv(arquivo_csv).fillna("") # Preenche vazios para não dar erro
+            st.write("Prévia da Planilha:", df.head())
+            
+            if st.button("🚀 Atualizar Sistema"):
                 try:
-                    # Converte imagem para formato compatível
-                    img_parts = [{"mime_type": arquivo.type, "data": arquivo.getvalue()}]
+                    # Limpa o banco atual antes de subir o novo
+                    supabase.table("fluxos").delete().neq("id", "reset_all").execute()
                     
-                    prompt = """Analise a imagem e gere um JSON puro (lista de objetos).
-                    Formato: [{"id": "nome", "pergunta": "texto", "opcoes": {"Botão": "id_destino"}}]
-                    Não inclua explicações ou blocos de código markdown."""
-                    
-                    # Chamada do modelo 2.0
-                    response = model.generate_content([prompt, img_parts[0]])
-                    
-                    # Limpeza do texto para JSON
-                    raw_text = response.text.replace('```json', '').replace('```', '').strip()
-                    dados = json.loads(raw_text)
-                    
-                    # Limpa fluxos antigos e guarda os novos
-                    supabase.table("fluxos").delete().neq("id", "reset").execute()
-                    for item in dados:
-                        supabase.table("fluxos").upsert(item).execute()
+                    for _, row in df.iterrows():
+                        dict_opcoes = {}
+                        # Lógica para capturar pares de colunas (Botão X e Destino X)
+                        # Começa da 3ª coluna (índice 2) e pula de 2 em 2
+                        for i in range(2, len(df.columns), 2):
+                            nome_botao = row.iloc[i]
+                            destino = row.iloc[i+1] if (i+1) < len(df.columns) else ""
+                            
+                            if nome_botao and destino: # Só adiciona se ambos estiverem preenchidos
+                                dict_opcoes[str(nome_botao)] = str(destino)
                         
-                    st.success("✅ Sistema atualizado! Vá à aba Navegação.")
+                        supabase.table("fluxos").insert({
+                            "id": str(row['id']),
+                            "pergunta": row['pergunta'],
+                            "opcoes": dict_opcoes
+                        }).execute()
+                    
+                    st.success("✅ Sistema atualizado com sucesso!")
                     st.balloons()
                 except Exception as e:
-                    st.error(f"Erro no processamento: {e}")
-                    st.info("Verifique se a imagem é clara ou tente o modelo Gemini Pro se o erro 404 persistir.")
-        
-        if st.button("🗑️ Resetar Histórico de BI (Logs)"):
-            supabase.table("logs").delete().neq("id", 0).execute()
-            st.warning("Todos os logs foram apagados.")
-            
-    elif senha_inserida != "":
-        st.error("Palavra-passe incorreta.")
+                    st.error(f"Erro ao processar planilha: {e}")
