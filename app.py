@@ -2,50 +2,59 @@ import streamlit as st
 import pandas as pd
 import google.generativeai as genai
 from supabase import create_client
+import json
 
-# 1. Configuração de Estilo (Cores Neutras)
+# --- ESTILO DARK PROFISSIONAL ---
 st.set_page_config(page_title="Engine Decision Tree", layout="wide")
-
 st.markdown("""
     <style>
-    .stApp { background-color: #FFFFFF; }
-    .stButton>button { background-color: #2D3436; color: white; border-radius: 8px; }
-    .stButton>button:hover { background-color: #636E72; color: white; }
-    h1, h2, h3 { color: #2D3436; }
+    .stApp { background-color: #0E1117; color: #FFFFFF; }
+    .stButton>button { width: 100%; border-radius: 5px; height: 3em; background-color: #262730; color: white; border: 1px solid #4B4B4B; }
+    .stButton>button:hover { border-color: #FF4B4B; color: #FF4B4B; }
+    .instruction-card { background-color: #161B22; padding: 20px; border-radius: 10px; border: 1px solid #30363D; text-align: center; margin-bottom: 20px; }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. Conexão Segura com as Chaves (Secrets)
-try:
-    SUPABASE_URL = st.secrets["SUPABASE_URL"]
-    SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
-    GEMINI_KEY = st.secrets["GEMINI_KEY"]
-    
-    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-    genai.configure(api_key=GEMINI_KEY)
-    model = genai.GenerativeModel('gemini-1.5-flash')
-except:
-    st.error("Erro: Configure as chaves no painel do Streamlit Cloud.")
+# --- CONEXÕES ---
+url, key, gemini_key = st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"], st.secrets["GEMINI_KEY"]
+supabase = create_client(url, key)
+genai.configure(api_key=gemini_key)
+model = genai.GenerativeModel('gemini-1.5-flash')
 
 # --- INTERFACE ---
 st.title("📂 Engine Decision Tree")
-
 tab1, tab2 = st.tabs(["🎮 Navegação", "⚙️ Admin"])
 
 with tab1:
-    st.info("O fluxo aparecerá aqui após ser alimentado no painel Admin.")
-    # A lógica de botões será processada aqui lendo o banco de dados
+    res = supabase.table("fluxos").select("*").execute()
+    if not res.data:
+        st.info("Nenhum fluxo encontrado. Vá em Admin e suba uma imagem.")
+    else:
+        fluxo = {item['id']: item for item in res.data}
+        if 'step' not in st.session_state: st.session_state.step = res.data[0]['id']
+        atual = fluxo.get(st.session_state.step)
+        if atual:
+            st.markdown(f"<div class='instruction-card'><h2>{atual['pergunta']}</h2></div>", unsafe_allow_html=True)
+            opcoes = atual.get('opcoes', {})
+            cols = st.columns(len(opcoes) if opcoes else 1)
+            for i, (texto, destino) in enumerate(opcoes.items()):
+                if cols[i].button(texto):
+                    supabase.table("logs").insert({"no_nome": atual['pergunta'], "escolha": texto}).execute()
+                    st.session_state.step = destino
+                    st.rerun()
+            if st.button("⬅️ Reiniciar"):
+                st.session_state.step = res.data[0]['id']
+                st.rerun()
 
 with tab2:
-    st.subheader("Alimentar Sistema")
-    upload = st.file_uploader("Suba a imagem do fluxograma", type=["png", "jpg"])
-    
-    if upload and st.button("Processar com IA"):
-        st.write("IA lendo imagem... (Simulação)")
-        # Aqui entra a chamada da API do Gemini para salvar no Supabase
-
-    st.divider()
-    st.subheader("Relatórios (BI)")
-    if st.button("Gerar Log de Teste"):
-        supabase.table("logs").insert({"no_nome": "Teste", "escolha": "Início"}).execute()
-        st.success("Log salvo no banco!")
+    st.subheader("🔐 Área do Administrador")
+    senha = st.text_input("Senha", type="password")
+    if senha == st.secrets["ADMIN_PASSWORD"]:
+        st.success("Acesso liberado!")
+        arquivo = st.file_uploader("Suba a imagem do fluxograma", type=["png", "jpg", "jpeg"])
+        if arquivo and st.button("🤖 Processar com IA"):
+            with st.spinner("Lendo imagem..."):
+                resposta = model.generate_content(["Transforme este fluxograma em um JSON (lista de objetos com 'id', 'pergunta', 'opcoes' como dicionário texto:id_destino). Retorne apenas o JSON puro.", arquivo])
+                limpo = resposta.text.replace('```json', '').replace('```', '').strip()
+                for item in json.loads(limpo): supabase.table("fluxos").upsert(item).execute()
+                st.success("Fluxo atualizado!")
