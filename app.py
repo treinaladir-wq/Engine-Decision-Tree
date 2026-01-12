@@ -14,8 +14,6 @@ st.markdown("""
     .instruction-card { background-color: #161B22; padding: 25px; border-radius: 12px; border: 1px solid #30363D; text-align: center; margin-bottom: 20px; }
     .tag-card { background-color: #1c2128; padding: 15px; border-radius: 8px; border-left: 5px solid #00FFAA; margin-bottom: 10px; }
     h1, h2, h3, p, label { color: #F5F5F5 !important; }
-    /* Estilo para destacar o N2 */
-    .n2-header { color: #FF4B4B !important; font-weight: bold; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -39,34 +37,28 @@ with tab_fluxo:
     if not todos_temas:
         st.info("Nenhum fluxograma disponível. Use a aba Gestão para subir um CSV.")
     else:
-        busca_fluxo = st.text_input("🔍 Pesquisar guia (ex: Motor, Reembolso...)", "").lower()
+        busca_fluxo = st.text_input("🔍 Pesquisar guia:", "").lower()
         temas_filtrados = [t for t in todos_temas if busca_fluxo in t.lower()]
         
         if temas_filtrados:
             tema_selecionado = st.selectbox("Selecione o Fluxograma:", temas_filtrados)
-            
             res = supabase.table("fluxos").select("*").eq("tema", tema_selecionado).execute()
             if res.data:
                 fluxo = {str(item['id']): item for item in res.data}
-                
                 if 'step' not in st.session_state or st.session_state.get('last_tema') != tema_selecionado:
                     st.session_state.step = str(res.data[0]['id'])
                     st.session_state.last_tema = tema_selecionado
-                
                 atual = fluxo.get(st.session_state.step)
                 if atual:
                     st.markdown(f"<div class='instruction-card'><h3>{tema_selecionado}</h3><h2>{atual['pergunta']}</h2></div>", unsafe_allow_html=True)
-                    
                     opcoes = atual.get('opcoes', {})
                     if isinstance(opcoes, str): opcoes = json.loads(opcoes)
-                    
                     if opcoes:
                         cols = st.columns(len(opcoes))
                         for i, (texto, destino) in enumerate(opcoes.items()):
                             if cols[i].button(texto, key=f"btn_{i}"):
                                 st.session_state.step = str(destino)
                                 st.rerun()
-                    
                     if st.button("⬅️ Reiniciar Fluxo"):
                         st.session_state.step = str(res.data[0]['id'])
                         st.rerun()
@@ -75,53 +67,37 @@ with tab_fluxo:
 with tab_tags:
     st.header("🏷️ Consulta de Tags CRM")
     busca_tag = st.text_input("Pesquise por Tag ou Tema:", key="search_tags").lower()
-    
     res_t = supabase.table("book_tags").select("*").execute()
     if res_t.data:
         df_tags = pd.DataFrame(res_t.data)
         if busca_tag:
             filt = df_tags[df_tags['TAG'].str.lower().str.contains(busca_tag, na=False) | 
                            df_tags['Tema'].str.lower().str.contains(busca_tag, na=False)]
-            
             for _, row in filt.iterrows():
-                st.markdown(f"""
-                <div class='tag-card'>
-                    <strong>TAG:</strong> {row['TAG']} | <strong>TIME:</strong> {row['Time']}<br>
-                    <p style='margin-top:5px;'>{row['Resumo']}</p>
-                </div>
-                """, unsafe_allow_html=True)
+                st.markdown(f"<div class='tag-card'><strong>TAG:</strong> {row['TAG']} | <strong>TIME:</strong> {row['Time']}<br>{row['Resumo']}</div>", unsafe_allow_html=True)
                 st.code(row['TAG'], language="text")
 
-# --- ABA 3: BOOK N2 (BUSCA AMPLIADA) ---
+# --- ABA 3: BOOK N2 ---
 with tab_n2:
     st.header("🚀 Book N2 / Escalonamento")
-    busca_n2 = st.text_input("Pesquise por Tag, Resumo ou palavra-chave da Orientação:", key="search_n2").lower()
-    
+    busca_n2 = st.text_input("Pesquise por Tag, Resumo ou Orientação:", key="search_n2").lower()
     res_n = supabase.table("book_n2").select("*").execute()
     if res_n.data:
         df_n2 = pd.DataFrame(res_n.data)
         if busca_n2:
-            # Filtro em 3 colunas simultâneas
             filt_n2 = df_n2[
                 df_n2['Tag'].str.lower().str.contains(busca_n2, na=False) | 
                 df_n2['Resumo'].str.lower().str.contains(busca_n2, na=False) |
                 df_n2['Orientação completa'].str.lower().str.contains(busca_n2, na=False)
             ]
-            
-            if not filt_n2.empty:
-                for _, row in filt_n2.iterrows():
-                    with st.expander(f"📌 Tag: {row['Tag']} | N2: {row['N2 / Não Resolvido']}"):
-                        st.markdown(f"**Resumo:** {row['Resumo']}")
-                        st.markdown(f"**Orientação Completa:**\n{row['Orientação completa']}")
-                        st.markdown(f"**Fonte:** {row['Fonte']}")
-                        st.markdown(f"**Encaminha N2?** {row['N2 / Não Resolvido']}")
-                        st.code(row['Tag'], language="text")
-            else:
-                st.warning("Nenhum resultado encontrado no Book N2.")
-    else:
-        st.info("O Book N2 está vazio. Use a aba Gestão.")
+            for _, row in filt_n2.iterrows():
+                with st.expander(f"📌 Tag: {row['Tag']} | N2: {row['N2 / Não Resolvido']}"):
+                    st.markdown(f"**Resumo:** {row['Resumo']}")
+                    st.markdown(f"**Orientação Completa:**\n{row['Orientação completa']}")
+                    st.markdown(f"**Fonte:** {row['Fonte']}")
+                    st.code(row['Tag'], language="text")
 
-# --- ABA 4: GESTÃO (ADMIN) ---
+# --- ABA 4: GESTÃO (COM CORREÇÃO DE CÉLULAS VAZIAS) ---
 with tab_gestao:
     st.subheader("🔐 Painel de Controle")
     senha = st.text_input("Senha de Acesso", type="password")
@@ -131,40 +107,41 @@ with tab_gestao:
         modo_upload = st.radio("Selecione o que deseja atualizar:", ["Tags CRM", "Book N2", "Novo Fluxograma"])
         
         if modo_upload == "Tags CRM":
-            st.write("### 📤 Atualizar Tags")
-            st.caption("Colunas esperadas: TAG, Tema, Time, Resumo")
-            arq = st.file_uploader("Suba a planilha de Tags", type=["csv", "xlsx"], key="up_tags")
+            arq = st.file_uploader("Suba a planilha de Tags", type=["csv", "xlsx"])
             if arq and st.button("Salvar Tags"):
-                df = pd.read_csv(arq) if arq.name.endswith('.csv') else pd.read_excel(arq)
-                df.columns = [c.strip() for c in df.columns]
-                supabase.table("book_tags").delete().neq("id", -1).execute()
-                supabase.table("book_tags").insert(df.to_dict(orient='records')).execute()
-                st.success("Base de Tags atualizada!")
+                try:
+                    df = pd.read_csv(arq) if arq.name.endswith('.csv') else pd.read_excel(arq)
+                    df = df.fillna("") # CORREÇÃO: Remove valores nulos (NaN)
+                    df.columns = [c.strip() for c in df.columns]
+                    supabase.table("book_tags").delete().neq("id", -1).execute()
+                    supabase.table("book_tags").insert(df.to_dict(orient='records')).execute()
+                    st.success("Base de Tags atualizada!")
+                except Exception as e: st.error(f"Erro: {e}")
 
         elif modo_upload == "Book N2":
-            st.write("### 📤 Atualizar Book N2")
-            st.caption("Colunas: Tag, Orientação completa, N2 / Não Resolvido, Fonte, Resumo")
-            arq = st.file_uploader("Suba a planilha de N2", type=["csv", "xlsx"], key="up_n2")
+            arq = st.file_uploader("Suba a planilha de N2", type=["csv", "xlsx"])
             if arq and st.button("Salvar N2"):
-                df = pd.read_csv(arq) if arq.name.endswith('.csv') else pd.read_excel(arq)
-                df.columns = [c.strip() for c in df.columns]
-                supabase.table("book_n2").delete().neq("id", -1).execute()
-                supabase.table("book_n2").insert(df.to_dict(orient='records')).execute()
-                st.success("Base N2 atualizada!")
+                try:
+                    df = pd.read_csv(arq) if arq.name.endswith('.csv') else pd.read_excel(arq)
+                    df = df.fillna("") # CORREÇÃO: Remove valores nulos (NaN)
+                    df.columns = [c.strip() for c in df.columns]
+                    supabase.table("book_n2").delete().neq("id", -1).execute()
+                    supabase.table("book_n2").insert(df.to_dict(orient='records')).execute()
+                    st.success("Base N2 atualizada!")
+                except Exception as e: st.error(f"Erro: {e}")
 
         elif modo_upload == "Novo Fluxograma":
-            st.write("### 📤 Novo Fluxograma")
             nome_tema = st.text_input("Nome do Tema")
-            arq = st.file_uploader("Suba o CSV do Fluxo", type=["csv"], key="up_fluxo")
+            arq = st.file_uploader("Suba o CSV do Fluxo", type=["csv"])
             if arq and nome_tema and st.button("Salvar Fluxo"):
-                df = pd.read_csv(arq, sep=None, engine='python').fillna("")
-                supabase.table("fluxos").delete().eq("tema", nome_tema).execute()
-                for _, row in df.iterrows():
-                    opts = {}
-                    for i in range(2, len(df.columns), 2):
-                        txt, dest = str(row.iloc[i]).strip(), str(row.iloc[i+1]).strip()
-                        if txt and dest: opts[txt] = dest
-                    supabase.table("fluxos").insert({"id": str(row['id']), "pergunta": str(row['pergunta']), "tema": nome_tema, "opcoes": opts}).execute()
-                st.success(f"Fluxograma '{nome_tema}' disponível!")
-    elif senha != "":
-        st.error("Senha incorreta.")
+                try:
+                    df = pd.read_csv(arq, sep=None, engine='python').fillna("") # CORREÇÃO: fillna aqui também
+                    supabase.table("fluxos").delete().eq("tema", nome_tema).execute()
+                    for _, row in df.iterrows():
+                        opts = {}
+                        for i in range(2, len(df.columns), 2):
+                            txt, dest = str(row.iloc[i]).strip(), str(row.iloc[i+1]).strip()
+                            if txt and dest: opts[txt] = dest
+                        supabase.table("fluxos").insert({"id": str(row['id']), "pergunta": str(row['pergunta']), "tema": nome_tema, "opcoes": opts}).execute()
+                    st.success(f"Fluxograma '{nome_tema}' disponível!")
+                except Exception as e: st.error(f"Erro: {e}")
