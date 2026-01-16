@@ -271,62 +271,62 @@ elif st.session_state.pagina_atual == "Gestao":
             res = supabase.table("logs_pesquisa").select("*").order("data_hora", desc=True).execute()
     
             if res.data:
-                    df_base = pd.DataFrame(res.data)
+                df_base = pd.DataFrame(res.data)
         # Formata a data para o padrão brasileiro
                 df_base['data_hora'] = pd.to_datetime(df_base['data_hora']).dt.strftime('%d/%m/%Y %H:%M')
 
                 c1, c2 = st.columns(2)
 
         # --- BOTÃO 1: BUSCAS MANUAIS (TAGS E N2) ---
-            with c1:
-            st.markdown("#### 🏷️ Book de Tags & Book N2")
+                with c1:
+                    st.markdown("#### 🏷️ Book de Tags & Book N2")
             # Filtra tudo que contém 'Tags' ou 'N2' no nome da aba
-            df_manuais = df_base[df_base['aba_utilizada'].str.contains('Tags|N2', case=False, na=False)]
+                    df_manuais = df_base[df_base['aba_utilizada'].str.contains('Tags|N2', case=False, na=False)]
             
-            if not df_manuais.empty:
+                    if not df_manuais.empty:
                 # Seleciona apenas as colunas relevantes para buscas
-                df_manuais_out = df_manuais[['data_hora', 'usuario_email', 'aba_utilizada', 'termo_pesquisado']].copy()
-                df_manuais_out.columns = ['Data/Hora', 'Usuário', 'Onde Buscou', 'Termo Pesquisado']
+                        df_manuais_out = df_manuais[['data_hora', 'usuario_email', 'aba_utilizada', 'termo_pesquisado']].copy()
+                        df_manuais_out.columns = ['Data/Hora', 'Usuário', 'Onde Buscou', 'Termo Pesquisado']
                 
-                output_m = io.BytesIO()
-                with pd.ExcelWriter(output_m, engine='xlsxwriter') as writer:
-                    df_manuais_out.to_excel(writer, index=False, sheet_name='Buscas_Manuais')
+                        output_m = io.BytesIO()
+                        with pd.ExcelWriter(output_m, engine='xlsxwriter') as writer:
+                            df_manuais_out.to_excel(writer, index=False, sheet_name='Buscas_Manuais')
                 
-                st.download_button(
-                    label="📥 Baixar Relatório Tags e N2",
-                    data=output_m.getvalue(),
-                    file_name=f"RELATORIO_BUSCAS_{datetime.now().strftime('%d_%m_%Y')}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-            else:
+                        st.download_button(
+                            label="📥 Baixar Relatório Tags e N2",
+                            data=output_m.getvalue(),
+                            file_name=f"RELATORIO_BUSCAS_{datetime.now().strftime('%d_%m_%Y')}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        )
+                    else:
                 st.info("Sem dados de buscas para exportar.")
 
         # --- BOTÃO 2: EXPERIÊNCIA CX (FLUXOS) ---
-            with c2:
-                st.markdown("#### 🎮 Experiência CX (Fluxos)")
-            # Filtra tudo que contém 'Experiencia' ou 'Fluxo'
-                df_fluxos = df_base[df_base['aba_utilizada'].str.contains('Experiencia|Fluxo', case=False, na=False)]
-            
-            if not df_fluxos.empty:
-                # Conforme solicitado: Data/Hora e qual Fluxo utilizou (termo_pesquisado guarda o nome do fluxo)
-                df_fluxos_out = df_fluxos[['data_hora', 'usuario_email', 'termo_pesquisado']].copy()
-                df_fluxos_out.columns = ['Data/Hora', 'Usuário', 'Fluxo Utilizado']
-                
-                output_f = io.BytesIO()
-                with pd.ExcelWriter(output_f, engine='xlsxwriter') as writer:
-                    df_fluxos_out.to_excel(writer, index=False, sheet_name='Uso_Fluxogramas')
-                
-                st.download_button(
-                    label="📥 Baixar Relatório de Fluxos",
-                    data=output_f.getvalue(),
-                    file_name=f"RELATORIO_FLUXOS_{datetime.now().strftime('%d_%m_%Y')}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
+                with c2:
+                    st.markdown("#### 🎮 Experiência CX (Fluxos)")
+                    # Filtra tudo que contém 'Experiencia' ou 'Fluxo'
+                    df_fluxos = df_base[df_base['aba_utilizada'].str.contains('Experiencia|Fluxo', case=False, na=False)]
+                    
+                    if not df_fluxos.empty:
+                        # Conforme solicitado: Data/Hora e qual Fluxo utilizou (termo_pesquisado guarda o nome do fluxo)
+                        df_fluxos_out = df_fluxos[['data_hora', 'usuario_email', 'termo_pesquisado']].copy()
+                        df_fluxos_out.columns = ['Data/Hora', 'Usuário', 'Fluxo Utilizado']
+                        
+                        output_f = io.BytesIO()
+                        with pd.ExcelWriter(output_f, engine='xlsxwriter') as writer:
+                            df_fluxos_out.to_excel(writer, index=False, sheet_name='Uso_Fluxogramas')
+                        
+                        st.download_button(
+                            label="📥 Baixar Relatório de Fluxos",
+                            data=output_f.getvalue(),
+                            file_name=f"RELATORIO_FLUXOS_{datetime.now().strftime('%d_%m_%Y')}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        )
+                    else:
+                        st.info("Sem dados de fluxos para exportar.")
+        
             else:
-                st.info("Sem dados de fluxos para exportar.")
-
-    else:
-        st.warning("O banco de dados de logs está vazio.")
+                st.warning("O banco de dados de logs está vazio.")
 
         with g_tab[2]: # UPLOAD
             tipo = st.radio("Base:", ["Tags CRM", "Book N2", "Fluxogramas"])
