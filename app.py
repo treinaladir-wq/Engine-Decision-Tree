@@ -95,17 +95,33 @@ try:
 except:
     st.error("Erro de conexão."); st.stop()
 
-# --- 3. LOGS (VERSÃO BLINDADA) ---
 def registrar_log(termo, aba, passo="n/a", completou=False):
     email = st.session_state.get('user_email', 'n/a')
-    log_data = {
+    
+    # Dados que vamos tentar enviar
+    dados_log = {
         "usuario_email": email, 
         "termo_pesquisado": str(termo), 
-        "aba_utilizada": str(aba), 
-        "passo_fluxo": str(passo)
-        # Remova temporariamente a linha do 'completou' se o erro persistir
+        "aba_utilizada": str(aba),
+        "passo_fluxo": str(passo),
+        "completou": bool(completou)
     }
-    # ... resto da função
+    
+    try:
+        # Tenta a inserção completa
+        supabase.table("logs_pesquisa").insert(dados_log).execute()
+    except Exception as e:
+        # Se der erro (ex: coluna faltando), tenta gravar apenas o essencial para não perder o log
+        try:
+            essencial = {
+                "usuario_email": email, 
+                "termo_pesquisado": str(termo), 
+                "aba_utilizada": str(aba)
+            }
+            supabase.table("logs_pesquisa").insert(essencial).execute()
+        except:
+            # Se nem o essencial gravar, mostra o erro no console do Streamlit
+            st.error(f"Erro crítico no log: {e}")
 
 # --- 4. ESTADO E LOGIN ---
 if 'logged_in' not in st.session_state: st.session_state.logged_in = False
