@@ -67,7 +67,7 @@ if st.session_state.pagina_atual == "Hub":
     st.divider()
     if st.button("⚙️ GESTÃO E BI"): st.session_state.pagina_atual = "Gestao"; st.rerun()
 
-# --- BOOK DE TAGS (COM FILTROS POR TIME E TIPO AUTOMÁTICO) ---
+# --- BOOK DE TAGS (FORMATO TABELA: TAG | TIME | RESUMO) ---
 elif st.session_state.pagina_atual == "Tags":
     if st.button("⬅️ Voltar"): st.session_state.pagina_atual = "Hub"; st.rerun()
     st.title("🏷️ Book de Tags CRM")
@@ -75,14 +75,16 @@ elif st.session_state.pagina_atual == "Tags":
     res = supabase.table("book_tags").select("*").execute()
     if res.data:
         df = pd.DataFrame(res.data)
+        
+        # Identifica a coluna da Tag (suporta 'TAG' ou 'Tag')
         col_tag = 'TAG' if 'TAG' in df.columns else 'Tag'
         
-        # Lógica de extração do tipo pela primeira palavra
+        # Lógica de extração do tipo pela primeira palavra (para o filtro)
         def get_tipo(t):
             return str(t).split()[0].replace("-","").replace("_","").capitalize() if t and str(t)!='nan' else "Outros"
         df['Tipo_Auto'] = df[col_tag].apply(get_tipo)
 
-        # UI de Filtros
+        # --- ÁREA DE FILTROS ---
         st.markdown("<div class='filter-area'>", unsafe_allow_html=True)
         f1, f2 = st.columns(2)
         with f1:
@@ -90,26 +92,52 @@ elif st.session_state.pagina_atual == "Tags":
             sel_time = st.selectbox("Filtrar por Time:", times)
         with f2:
             tipos = ["Todos", "Problema", "Dúvida", "Reclamação", "Solicitação"]
-            sel_tipo = st.selectbox("Tipo de Tag (Extraído):", tipos)
-        query = st.text_input("🔍 Busca por palavra-chave:").strip().lower()
+            sel_tipo = st.selectbox("Tipo de Tag:", tipos)
+        
+        query = st.text_input("🔍 Busca rápida por palavra-chave:").strip().lower()
         st.markdown("</div>", unsafe_allow_html=True)
 
-        # Aplicação dos Filtros
+        # --- APLICAÇÃO DOS FILTROS ---
         filt = df.copy()
         if sel_time != "Todos": filt = filt[filt['Time'] == sel_time]
         if sel_tipo != "Todos": filt = filt[filt['Tipo_Auto'] == sel_tipo]
         if query:
             registrar_log(query, "Tags")
-            filt = filt[filt.apply(lambda r: query in r.astype(str).str.lower().values, axis=1)]
+            # Busca o termo em qualquer coluna do DataFrame filtrado
+            mask = filt.apply(lambda r: r.astype(str).str.lower().str.contains(query).any(), axis=1)
+            filt = filt[mask]
 
-        for _, r in filt.iterrows():
-            nome = r[col_tag]
-            st.markdown(f"<div class='tag-result'><h3>🏷️ {nome}</h3>", unsafe_allow_html=True)
-            for c in [c for c in df.columns if c.lower() not in ['id', 'created_at', 'tipo_auto', col_tag.lower()]]:
-                if str(r[c]).lower() != "nan": st.write(f"**{c}:** {r[c]}")
-            st.code(nome, language="text")
-            st.markdown("</div>", unsafe_allow_html=True)
-    else: st.warning("Base de Tags vazia.")
+        # --- EXIBIÇÃO EM FORMATO DE TABELA ORGANIZADA ---
+        if not filt.empty:
+            # Selecionamos e renomeamos apenas as colunas solicitadas para a tabela
+            # Nota: Ajuste os nomes abaixo ('Resumo', 'Time') conforme os nomes exatos no seu Excel
+            col_resumo = 'Resumo' if 'Resumo' in df.columns else (df.columns[2] if len(df.columns) > 2 else df.columns[-1])
+            col_time = 'Time' if 'Time' in df.columns else 'Time Responsável'
+
+            tab_display = filt[[col_tag, col_time, col_resumo]].copy()
+            tab_display.columns = ["Nome da Tag", "Time Responsável", "Resumo"]
+
+            # Exibe a tabela com largura total
+            st.dataframe(
+                tab_display, 
+                use_container_width=True, 
+                hide_index=True,
+                column_config={
+                    "Nome da Tag": st.column_config.TextColumn("🏷️ Nome da Tag", width="medium"),
+                    "Time Responsável": st.column_config.TextColumn("👥 Time", width="small"),
+                    "Resumo": st.column_config.TextColumn("📝 Resumo/Orientação", width="large"),
+                }
+            )
+            
+            # Atalho para copiar: Mostra as tags em formato de código abaixo da tabela se houver poucas selecionadas
+            if len(filt) <= 10:
+                st.info("💡 Clique abaixo para copiar a tag rapidamente:")
+                for _, r in filt.iterrows():
+                    st.code(r[col_tag], language="text")
+        else:
+            st.warning("Nenhuma tag encontrada com esses filtros.")
+    else:
+        st.error("Base de Tags não carregada.")
 
 # --- BOOK N2 (BUSCA SIMPLES + ACORDEÃO) ---
 elif st.session_state.pagina_atual == "N2":
