@@ -59,7 +59,6 @@ with st.sidebar:
 
 # --- 7. NAVEGAÇÃO ---
 
-# --- HUB ---
 if st.session_state.pagina_atual == "Hub":
     st.markdown("<h1>Central de Apoio CNX</h1>", unsafe_allow_html=True)
     c1, c2, c3 = st.columns(3)
@@ -75,7 +74,6 @@ if st.session_state.pagina_atual == "Hub":
     st.markdown("<br><hr>", unsafe_allow_html=True)
     if st.button("⚙️ Gestão e Dashboard de BI"): st.session_state.pagina_atual = "Gestao"; st.rerun()
 
-# --- PÁGINA: FLUXOS ---
 elif st.session_state.pagina_atual == "Fluxos":
     if st.button("⬅️ Voltar ao Menu"): st.session_state.pagina_atual = "Hub"; st.rerun()
     res_f = supabase.table("fluxos").select("tema").execute()
@@ -102,7 +100,6 @@ elif st.session_state.pagina_atual == "Fluxos":
                         st.session_state.step = str(dest); st.rerun()
                 if st.button("🔄 Reiniciar Guia"): st.session_state.step = str(res.data[0]['id']); st.rerun()
 
-# --- PÁGINAS: TAGS E N2 ---
 elif st.session_state.pagina_atual in ["Tags", "N2"]:
     aba = st.session_state.pagina_atual
     if st.button("⬅️ Voltar"): st.session_state.pagina_atual = "Hub"; st.rerun()
@@ -111,13 +108,13 @@ elif st.session_state.pagina_atual in ["Tags", "N2"]:
         registrar_log(busca, aba)
         tabela = "book_tags" if aba == "Tags" else "book_n2"
         res = supabase.table(tabela).select("*").execute()
-        df = pd.DataFrame(res.data)
-        filt = df[df.apply(lambda row: busca in row.astype(str).str.lower().values, axis=1)]
-        for _, r in filt.iterrows():
-            st.markdown(f"<div class='tag-card'><strong>{r.get('TAG', r.get('Tag'))}</strong><br>{r.get('Resumo', r.get('Orientação completa', ''))}</div>", unsafe_allow_html=True)
-            st.code(r.get('TAG', r.get('Tag')), language="text")
+        if res.data:
+            df = pd.DataFrame(res.data)
+            filt = df[df.apply(lambda row: busca in row.astype(str).str.lower().values, axis=1)]
+            for _, r in filt.iterrows():
+                st.markdown(f"<div class='tag-card'><strong>{r.get('TAG', r.get('Tag'))}</strong><br>{r.get('Resumo', r.get('Orientação completa', ''))}</div>", unsafe_allow_html=True)
+                st.code(r.get('TAG', r.get('Tag')), language="text")
 
-# --- PÁGINA: GESTÃO ---
 elif st.session_state.pagina_atual == "Gestao":
     if st.button("⬅️ Voltar"): st.session_state.pagina_atual = "Hub"; st.rerun()
     if st.text_input("Senha Admin", type="password") == admin_pw:
@@ -127,18 +124,24 @@ elif st.session_state.pagina_atual == "Gestao":
             logs = supabase.table("logs_pesquisa").select("*").order("data_hora", desc=True).execute()
             if logs.data:
                 df = pd.DataFrame(logs.data)
-                df['data_hora'] = pd.to_datetime(df['data_hora'])
                 
+                # --- TRAVA DE SEGURANÇA PARA COLUNAS NOVAS ---
+                for col in ['passo_fluxo', 'completou', 'termo_pesquisado', 'usuario_email', 'aba_utilizada']:
+                    if col not in df.columns: df[col] = "n/a"
+                
+                df['data_hora'] = pd.to_datetime(df['data_hora'])
                 st.subheader("📊 Performance e Funil")
                 df_f = df[df['aba_utilizada'] == 'Fluxos']
                 
                 c1, c2 = st.columns(2)
                 with c1:
                     if not df_f.empty:
-                        abandonos = df_f[df_f['completou'] == False]['passo_fluxo'].value_counts().nlargest(5).reset_index()
-                        st.plotly_chart(px.bar(abandonos, x='count', y='passo_fluxo', orientation='h', title="Top 5 Pontos de Abandono", color_discrete_sequence=['#FF4B4B']), use_container_width=True)
+                        df_ab = df_f[df_f['passo_fluxo'] != "n/a"]
+                        if not df_ab.empty:
+                            abandonos = df_ab[df_ab['completou'] == False]['passo_fluxo'].value_counts().nlargest(5).reset_index()
+                            st.plotly_chart(px.bar(abandonos, x='count', y='passo_fluxo', orientation='h', title="Top 5 Pontos de Abandono", color_discrete_sequence=['#FF4B4B']), use_container_width=True)
                 with c2:
-                    if not df_f.empty:
+                    if not df_f.empty and 'completou' in df_f.columns:
                         conclusao = df_f.groupby('termo_pesquisado')['completou'].value_counts(normalize=True).unstack().fillna(0)
                         if True in conclusao.columns:
                             st.plotly_chart(px.bar(conclusao, y=True, title="Taxa de Conclusão por Tema (%)"), use_container_width=True)
@@ -149,32 +152,27 @@ elif st.session_state.pagina_atual == "Gestao":
                 with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                     df_temp = df.copy()
                     df_temp['data_hora'] = df_temp['data_hora'].dt.strftime('%d/%m/%Y %H:%M')
+                    df_temp[df_temp['aba_utilizada'] != 'Fluxos'][['data_hora', 'usuario_email', 'aba_utilizada', 'termo_pesquisado']].to_excel(writer, index=False, sheet_name='Pesquisas_Gerais')
                     
-                    # Aba 1: Pesquisas Gerais
-                    df_b = df_temp[df_temp['aba_utilizada'] != 'Fluxos'][['data_hora', 'usuario_email', 'aba_utilizada', 'termo_pesquisado']]
-                    df_b.to_excel(writer, index=False, sheet_name='Pesquisas_Gerais')
-                    
-                    # Aba 2: Jornada nos Fluxos
                     df_fx = df_temp[df_temp['aba_utilizada'] == 'Fluxos'][['data_hora', 'usuario_email', 'termo_pesquisado', 'passo_fluxo', 'completou']]
                     df_fx.columns = ['Data/Hora', 'Usuário', 'Tema do Fluxo', 'Último Passo', 'Completou?']
                     df_fx.to_excel(writer, index=False, sheet_name='Jornada_Fluxos')
-                
                 st.download_button("Baixar Relatório Detalhado (Excel)", data=output.getvalue(), file_name=f"relatorio_cnx_{datetime.now().strftime('%d_%m')}.xlsx")
 
         elif m == "Gerenciar Fluxos":
             res_f = supabase.table("fluxos").select("tema").execute()
             temas = sorted(list(set([i['tema'] for i in res_f.data]))) if res_f.data else []
             t_ex = st.selectbox("Selecione o tema para excluir:", temas)
-            if st.checkbox(f"Confirmar remoção de: {t_ex}") and st.button("🔥 Excluir Permanentemente"):
+            if st.checkbox(f"Confirmar remoção de: {t_ex}") and st.button("🔥 Excluir"):
                 supabase.table("fluxos").delete().eq("tema", t_ex).execute(); st.rerun()
 
         elif m == "Atualizar Bases":
-            tipo = st.radio("Escolha a base para upload:", ["Tags CRM", "Book N2", "Fluxogramas"])
-            arq = st.file_uploader("Suba o arquivo (CSV ou Excel)", type=["csv", "xlsx"])
-            if arq and st.button("Salvar no Banco de Dados"):
+            tipo = st.radio("Escolha a base:", ["Tags CRM", "Book N2", "Fluxogramas"])
+            arq = st.file_uploader("Suba o arquivo", type=["csv", "xlsx"])
+            if arq and st.button("Salvar no Banco"):
                 df_up = pd.read_csv(arq) if arq.name.endswith('.csv') else pd.read_excel(arq)
                 if tipo == "Fluxogramas":
-                    n_f = st.text_input("Nome do Tema para este arquivo:")
+                    n_f = st.text_input("Nome do Tema:")
                     if n_f:
                         supabase.table("fluxos").delete().eq("tema", n_f).execute()
                         for _, row in df_up.iterrows():
@@ -189,4 +187,4 @@ elif st.session_state.pagina_atual == "Gestao":
                     tabela = "book_tags" if tipo == "Tags CRM" else "book_n2"
                     supabase.table(tabela).delete().neq("id", -1).execute()
                     supabase.table(tabela).insert(df_up.to_dict(orient='records')).execute()
-                    st.success(f"Base de {tipo} atualizada!")
+                    st.success("Base atualizada!")
