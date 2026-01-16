@@ -137,7 +137,7 @@ if st.session_state.pagina_atual == "Hub":
 # --- BOOK DE TAGS ---
 elif st.session_state.pagina_atual == "Book de Tags":
     if st.button("⬅️ Voltar ao Hub"): st.session_state.pagina_atual = "Hub"; st.rerun()
-    st.title("🏷️ Book de Tags")
+    st.title("🏷️ Book de Tags CRM")
     
     res = supabase.table("book_tags").select("*").execute()
     if res.data:
