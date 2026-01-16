@@ -7,85 +7,18 @@ import io
 import plotly.express as px
 
 # --- 1. CONFIGURAÇÃO DE INTERFACE ---
-# --- 1. CONFIGURAÇÃO DE INTERFACE (ESTILO WILL BANK) ---
 st.set_page_config(page_title="Portal CNX - Inteligência de Apoio", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
-    /* Importando fonte similar à do Will bank */
-    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
-
-    * { font-family: 'Poppins', sans-serif; }
-
-    /* Fundo escuro levemente azulado, como no app */
-    .stApp { background-color: #000000; color: #FFFFFF; }
-
-    /* Botões Principais Estilo Will */
-    .stButton>button { 
-        width: 100%; 
-        border-radius: 16px; 
-        height: 4.5em; 
-        background-color: #fbd737; /* Amarelo Will */
-        color: #000000 !important; /* Texto Preto para contraste */
-        border: none; 
-        font-size: 18px; 
-        transition: all 0.3s ease; 
-        font-weight: 700;
-        box-shadow: 0px 4px 15px rgba(251, 215, 55, 0.1);
-    }
-    .stButton>button:hover { 
-        background-color: #ffea00; 
-        transform: translateY(-3px); 
-        box-shadow: 0px 6px 20px rgba(251, 215, 55, 0.3);
-    }
-
-    /* Cards do Hub */
-    .hub-card { 
-        background-color: #1a1a1a; 
-        padding: 25px; 
-        border-radius: 24px; /* Mais arredondado */
-        text-align: center; 
-        border: 1px solid #333333; 
-        margin-bottom: 5px; 
-        min-height: 160px; 
-        display: flex; 
-        flex-direction: column; 
-        justify-content: center;
-        transition: 0.3s;
-    }
-    .hub-card:hover { border-color: #fbd737; }
-    .hub-card h3 { color: #fbd737 !important; margin-top: 10px; }
-
-    /* Inputs e Filtros */
-    .stTextInput>div>div>input, .stSelectbox>div>div>div {
-        border-radius: 12px !important;
-        border: 1px solid #333 !important;
-        background-color: #1a1a1a !important;
-        color: white !important;
-    }
-
-    /* Tabela de Tags */
-    .stDataFrame { 
-        border: 1px solid #333; 
-        border-radius: 16px; 
-        overflow: hidden; 
-    }
-
-    /* Login Box */
-    .login-box { 
-        background-color: #1a1a1a; 
-        padding: 50px; 
-        border-radius: 30px; 
-        border: 2px solid #fbd737; 
-        text-align: center; 
-        max-width: 500px; 
-        margin: auto; 
-    }
-    
-    h1 { font-weight: 700; letter-spacing: -1px; color: #FFFFFF !important; }
-    
-    /* Linha divisória amarela */
-    hr { border: 0; height: 1px; background: linear-gradient(to right, transparent, #fbd737, transparent); }
+    .stApp { background-color: #0E1117; color: #FFFFFF; }
+    .stButton>button { width: 100%; border-radius: 12px; height: 4.5em; background-color: #161B22; color: white; border: 1px solid #30363D; font-size: 18px; transition: 0.3s; font-weight: bold; }
+    .stButton>button:hover { border-color: #00FFAA !important; color: #00FFAA !important; background-color: #1c2128; transform: translateY(-2px); }
+    .login-box { background-color: #161B22; padding: 40px; border-radius: 15px; border: 1px solid #30363D; text-align: center; max-width: 500px; margin: auto; }
+    .hub-card { background-color: #1c2128; padding: 25px; border-radius: 12px; text-align: center; border: 1px solid #30363D; margin-bottom: 5px; min-height: 150px; display: flex; flex-direction: column; justify-content: center; }
+    .tag-result { background-color: #1c2128; padding: 20px; border-radius: 10px; border: 1px solid #30363D; border-left: 5px solid #00FFAA; margin-bottom: 15px; }
+    .filter-area { background-color: #161B22; padding: 20px; border-radius: 12px; border: 1px solid #30363D; margin-bottom: 20px; }
+    h1, h2, h3 { text-align: center; color: #F5F5F5 !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -97,25 +30,11 @@ except:
     st.error("Erro de conexão."); st.stop()
 
 # --- 3. LOGS ---
-# --- 3. LOGS (VERSÃO DIAGNÓSTICO) ---
 def registrar_log(termo, aba, passo="n/a", completou=False):
     email = st.session_state.get('user_email', 'n/a')
-    log_data = {
-        "usuario_email": email, 
-        "termo_pesquisado": str(termo), 
-        "aba_utilizada": str(aba), 
-        "passo_fluxo": str(passo), 
-        "completou": bool(completou)
-    }
     try:
-        # Tenta inserir no Supabase
-        res = supabase.table("logs_pesquisa").insert(log_data).execute()
-        # Se você quiser ver se está funcionando no modo desenvolvedor, 
-        # pode descomentar a linha abaixo temporariamente:
-        # st.toast(f"Log registrado: {aba}") 
-    except Exception as e:
-        # Se houver erro, ele mostrará na tela para você saber o que é
-        st.error(f"Erro ao salvar log: {e}")
+        supabase.table("logs_pesquisa").insert({"usuario_email": email, "termo_pesquisado": termo, "aba_utilizada": aba, "passo_fluxo": passo, "completou": completou}).execute()
+    except: pass
 
 # --- 4. ESTADO E LOGIN ---
 if 'logged_in' not in st.session_state: st.session_state.logged_in = False
@@ -152,7 +71,7 @@ if st.session_state.pagina_atual == "Hub":
 # --- BOOK DE TAGS ---
 elif st.session_state.pagina_atual == "Book de Tags":
     if st.button("⬅️ Voltar ao Hub"): st.session_state.pagina_atual = "Hub"; st.rerun()
-    st.title("🏷️ Book de Tags")
+    st.title("🏷️ Book de Tags CRM")
     
     res = supabase.table("book_tags").select("*").execute()
     if res.data:
@@ -287,7 +206,7 @@ elif st.session_state.pagina_atual == "Gestao":
                 st.download_button("📥 Baixar Relatório Detalhado", data=output.getvalue(), file_name=f"LOGS_USO_CNX_{datetime.now().strftime('%d_%m_%Y')}.xlsx")
 
         with g_tab[2]: # UPLOAD
-            tipo = st.radio("Base:", ["Tags", "Book N2", "Fluxogramas"])
+            tipo = st.radio("Base:", ["Tags CRM", "Book N2", "Fluxogramas"])
             arq = st.file_uploader("Arquivo", type=['csv', 'xlsx'])
             if arq and st.button("Salvar Dados"):
                 df_u = pd.read_csv(arq) if arq.name.endswith('.csv') else pd.read_excel(arq)
@@ -300,7 +219,7 @@ elif st.session_state.pagina_atual == "Gestao":
                             supabase.table("fluxos").insert({"id": str(row['id']), "pergunta": str(row['pergunta']), "tema": nome_tema, "opcoes": opts}).execute()
                         st.success("Fluxo Atualizado!")
                 else:
-                    target = "book_tags" if tipo == "Tags" else "book_n2"
+                    target = "book_tags" if tipo == "Tags CRM" else "book_n2"
                     supabase.table(target).delete().neq("id", -1).execute()
                     supabase.table(target).insert(df_u.to_dict(orient='records')).execute()
                     st.success(f"Base de {tipo} atualizada!")
