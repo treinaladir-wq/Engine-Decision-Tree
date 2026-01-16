@@ -270,7 +270,7 @@ elif st.session_state.pagina_atual == "Gestao":
     # Busca os dados brutos no Supabase
             res = supabase.table("logs_pesquisa").select("*").order("data_hora", desc=True).execute()
     
-                if res.data:
+            if res.data:
                     df_base = pd.DataFrame(res.data)
         # Formata a data para o padrão brasileiro
                 df_base['data_hora'] = pd.to_datetime(df_base['data_hora']).dt.strftime('%d/%m/%Y %H:%M')
