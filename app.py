@@ -265,7 +265,7 @@ elif st.session_state.pagina_atual == "Gestao":
                     c2.plotly_chart(px.bar(top, x='count', y='termo_pesquisado', orientation='h', title="Top 10 Buscas"), use_container_width=True)
 
         with g_tab[1]: # ABA DE RELATÓRIOS
-    st.subheader("📥 Exportação de Relatórios")
+            st.subheader("📥 Exportação de Relatórios")
     
     # Busca os dados brutos no Supabase
     res = supabase.table("logs_pesquisa").select("*").order("data_hora", desc=True).execute()
