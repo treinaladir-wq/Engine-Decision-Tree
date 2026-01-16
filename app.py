@@ -6,19 +6,85 @@ from datetime import datetime
 import io
 import plotly.express as px
 
-# --- 1. CONFIGURAÇÃO DE INTERFACE ---
+# --- 1. CONFIGURAÇÃO DE INTERFACE (ESTILO WILL BANK) ---
 st.set_page_config(page_title="Portal CNX - Inteligência de Apoio", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
-    .stApp { background-color: #0E1117; color: #FFFFFF; }
-    .stButton>button { width: 100%; border-radius: 12px; height: 4.5em; background-color: #161B22; color: white; border: 1px solid #30363D; font-size: 18px; transition: 0.3s; font-weight: bold; }
-    .stButton>button:hover { border-color: #00FFAA !important; color: #00FFAA !important; background-color: #1c2128; transform: translateY(-2px); }
-    .login-box { background-color: #161B22; padding: 40px; border-radius: 15px; border: 1px solid #30363D; text-align: center; max-width: 500px; margin: auto; }
-    .hub-card { background-color: #1c2128; padding: 25px; border-radius: 12px; text-align: center; border: 1px solid #30363D; margin-bottom: 5px; min-height: 150px; display: flex; flex-direction: column; justify-content: center; }
-    .tag-result { background-color: #1c2128; padding: 20px; border-radius: 10px; border: 1px solid #30363D; border-left: 5px solid #00FFAA; margin-bottom: 15px; }
-    .filter-area { background-color: #161B22; padding: 20px; border-radius: 12px; border: 1px solid #30363D; margin-bottom: 20px; }
-    h1, h2, h3 { text-align: center; color: #F5F5F5 !important; }
+    /* Importando fonte similar à do Will bank */
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+
+    * { font-family: 'Poppins', sans-serif; }
+
+    /* Fundo escuro levemente azulado, como no app */
+    .stApp { background-color: #000000; color: #FFFFFF; }
+
+    /* Botões Principais Estilo Will */
+    .stButton>button { 
+        width: 100%; 
+        border-radius: 16px; 
+        height: 4.5em; 
+        background-color: #fbd737; /* Amarelo Will */
+        color: #000000 !important; /* Texto Preto para contraste */
+        border: none; 
+        font-size: 18px; 
+        transition: all 0.3s ease; 
+        font-weight: 700;
+        box-shadow: 0px 4px 15px rgba(251, 215, 55, 0.1);
+    }
+    .stButton>button:hover { 
+        background-color: #ffea00; 
+        transform: translateY(-3px); 
+        box-shadow: 0px 6px 20px rgba(251, 215, 55, 0.3);
+    }
+
+    /* Cards do Hub */
+    .hub-card { 
+        background-color: #1a1a1a; 
+        padding: 25px; 
+        border-radius: 24px; /* Mais arredondado */
+        text-align: center; 
+        border: 1px solid #333333; 
+        margin-bottom: 5px; 
+        min-height: 160px; 
+        display: flex; 
+        flex-direction: column; 
+        justify-content: center;
+        transition: 0.3s;
+    }
+    .hub-card:hover { border-color: #fbd737; }
+    .hub-card h3 { color: #fbd737 !important; margin-top: 10px; }
+
+    /* Inputs e Filtros */
+    .stTextInput>div>div>input, .stSelectbox>div>div>div {
+        border-radius: 12px !important;
+        border: 1px solid #333 !important;
+        background-color: #1a1a1a !important;
+        color: white !important;
+    }
+
+    /* Tabela de Tags */
+    .stDataFrame { 
+        border: 1px solid #333; 
+        border-radius: 16px; 
+        overflow: hidden; 
+    }
+
+    /* Login Box */
+    .login-box { 
+        background-color: #1a1a1a; 
+        padding: 50px; 
+        border-radius: 30px; 
+        border: 2px solid #fbd737; 
+        text-align: center; 
+        max-width: 500px; 
+        margin: auto; 
+    }
+    
+    h1 { font-weight: 700; letter-spacing: -1px; color: #FFFFFF !important; }
+    
+    /* Linha divisória amarela */
+    hr { border: 0; height: 1px; background: linear-gradient(to right, transparent, #fbd737, transparent); }
     </style>
     """, unsafe_allow_html=True)
 
@@ -71,7 +137,7 @@ if st.session_state.pagina_atual == "Hub":
 # --- BOOK DE TAGS ---
 elif st.session_state.pagina_atual == "Book de Tags":
     if st.button("⬅️ Voltar ao Hub"): st.session_state.pagina_atual = "Hub"; st.rerun()
-    st.title("🏷️ Book de Tags CRM")
+    st.title("🏷️ Book de Tags")
     
     res = supabase.table("book_tags").select("*").execute()
     if res.data:
