@@ -299,7 +299,7 @@ elif st.session_state.pagina_atual == "Gestao":
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                         )
                     else:
-                st.info("Sem dados de buscas para exportar.")
+                        st.info("Sem dados de buscas para exportar.")
 
         # --- BOTÃO 2: EXPERIÊNCIA CX (FLUXOS) ---
                 with c2:
