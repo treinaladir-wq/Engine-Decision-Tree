@@ -139,24 +139,46 @@ elif st.session_state.pagina_atual == "Tags":
     else:
         st.error("Base de Tags não carregada.")
 
-# --- BOOK N2 (BUSCA SIMPLES + ACORDEÃO) ---
+# --- BOOK N2 (BUSCA CORRIGIDA + ACORDEÃO) ---
 elif st.session_state.pagina_atual == "N2":
     if st.button("⬅️ Voltar"): st.session_state.pagina_atual = "Hub"; st.rerun()
     st.title("🚀 Book N2")
-    q_n2 = st.text_input("Pesquisar Regra N2:").strip().lower()
+    
+    # Campo de busca com trim (remove espaços extras)
+    q_n2 = st.text_input("Pesquisar Regra N2 (digite qualquer termo):").strip().lower()
+    
     res = supabase.table("book_n2").select("*").execute()
+    
     if res.data:
         df = pd.DataFrame(res.data)
+        
+        # Filtro de Busca Robusto
         if q_n2:
             registrar_log(q_n2, "N2")
-            df = df[df.apply(lambda r: q_n2 in r.astype(str).str.lower().values, axis=1)]
-        for _, r in df.iterrows():
-            titulo = r.get('Assunto', r.get('Tag', 'Regra N2'))
-            with st.expander(f"📍 {titulo}"):
-                for c in [c for c in df.columns if c.lower() not in ['id', 'created_at']]:
-                    if str(r[c]).lower() != "nan": st.write(f"**{c}:** {r[c]}")
-    else: st.warning("Base N2 vazia.")
+            # Procura em todas as colunas, convertendo tudo para string e minúsculo
+            mask = df.apply(lambda row: row.astype(str).str.lower().str.contains(q_n2, na=False).any(), axis=1)
+            filt_n2 = df[mask]
+        else:
+            filt_n2 = df
 
+        if not filt_n2.empty:
+            st.write(f"Exibindo {len(filt_n2)} resultados:")
+            for _, r in filt_n2.iterrows():
+                # Tenta identificar o melhor título para o acordeão
+                titulo = r.get('Assunto', r.get('Tag', r.get('TAG', 'Regra de Escalonamento')))
+                time_resp = r.get('Time', r.get('Time Responsável', 'N2'))
+                
+                with st.expander(f"📍 {titulo} | {time_resp}"):
+                    # Exibe todas as colunas que não sejam IDs técnicos
+                    for c in [col for col in df.columns if col.lower() not in ['id', 'created_at']]:
+                        valor = str(r[c])
+                        if valor.lower() != "nan" and valor.strip() != "":
+                            st.write(f"**{c}:** {valor}")
+        else:
+            st.warning(f"Nenhum resultado encontrado para '{q_n2}'.")
+    else:
+        st.error("A base de dados N2 está vazia ou não pôde ser carregada.")
+        
 # --- FLUXOS E GESTÃO (MANTIDOS) ---
 elif st.session_state.pagina_atual == "Fluxos":
     if st.button("⬅️ Voltar"): st.session_state.pagina_atual = "Hub"; st.rerun()
