@@ -71,7 +71,7 @@ if st.session_state.pagina_atual == "Hub":
 # --- BOOK DE TAGS ---
 elif st.session_state.pagina_atual == "Book de Tags":
     if st.button("⬅️ Voltar ao Hub"): st.session_state.pagina_atual = "Hub"; st.rerun()
-    st.title("🏷️ Book de Tags CRM")
+    st.title("🏷️ Book de Tags")
     
     res = supabase.table("book_tags").select("*").execute()
     if res.data:
@@ -206,7 +206,7 @@ elif st.session_state.pagina_atual == "Gestao":
                 st.download_button("📥 Baixar Relatório Detalhado", data=output.getvalue(), file_name=f"LOGS_USO_CNX_{datetime.now().strftime('%d_%m_%Y')}.xlsx")
 
         with g_tab[2]: # UPLOAD
-            tipo = st.radio("Base:", ["Tags CRM", "Book N2", "Fluxogramas"])
+            tipo = st.radio("Base:", ["Tags", "Book N2", "Fluxogramas"])
             arq = st.file_uploader("Arquivo", type=['csv', 'xlsx'])
             if arq and st.button("Salvar Dados"):
                 df_u = pd.read_csv(arq) if arq.name.endswith('.csv') else pd.read_excel(arq)
@@ -219,7 +219,7 @@ elif st.session_state.pagina_atual == "Gestao":
                             supabase.table("fluxos").insert({"id": str(row['id']), "pergunta": str(row['pergunta']), "tema": nome_tema, "opcoes": opts}).execute()
                         st.success("Fluxo Atualizado!")
                 else:
-                    target = "book_tags" if tipo == "Tags CRM" else "book_n2"
+                    target = "book_tags" if tipo == "Tags" else "book_n2"
                     supabase.table(target).delete().neq("id", -1).execute()
                     supabase.table(target).insert(df_u.to_dict(orient='records')).execute()
                     st.success(f"Base de {tipo} atualizada!")
