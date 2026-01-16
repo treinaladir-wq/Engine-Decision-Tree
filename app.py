@@ -268,17 +268,17 @@ elif st.session_state.pagina_atual == "Gestao":
             st.subheader("📥 Exportação de Relatórios")
     
     # Busca os dados brutos no Supabase
-    res = supabase.table("logs_pesquisa").select("*").order("data_hora", desc=True).execute()
+            res = supabase.table("logs_pesquisa").select("*").order("data_hora", desc=True).execute()
     
-    if res.data:
-        df_base = pd.DataFrame(res.data)
+                if res.data:
+                    df_base = pd.DataFrame(res.data)
         # Formata a data para o padrão brasileiro
-        df_base['data_hora'] = pd.to_datetime(df_base['data_hora']).dt.strftime('%d/%m/%Y %H:%M')
+                df_base['data_hora'] = pd.to_datetime(df_base['data_hora']).dt.strftime('%d/%m/%Y %H:%M')
 
-        c1, c2 = st.columns(2)
+                c1, c2 = st.columns(2)
 
         # --- BOTÃO 1: BUSCAS MANUAIS (TAGS E N2) ---
-        with c1:
+            with c1:
             st.markdown("#### 🏷️ Book de Tags & Book N2")
             # Filtra tudo que contém 'Tags' ou 'N2' no nome da aba
             df_manuais = df_base[df_base['aba_utilizada'].str.contains('Tags|N2', case=False, na=False)]
@@ -302,10 +302,10 @@ elif st.session_state.pagina_atual == "Gestao":
                 st.info("Sem dados de buscas para exportar.")
 
         # --- BOTÃO 2: EXPERIÊNCIA CX (FLUXOS) ---
-        with c2:
-            st.markdown("#### 🎮 Experiência CX (Fluxos)")
+            with c2:
+                st.markdown("#### 🎮 Experiência CX (Fluxos)")
             # Filtra tudo que contém 'Experiencia' ou 'Fluxo'
-            df_fluxos = df_base[df_base['aba_utilizada'].str.contains('Experiencia|Fluxo', case=False, na=False)]
+                df_fluxos = df_base[df_base['aba_utilizada'].str.contains('Experiencia|Fluxo', case=False, na=False)]
             
             if not df_fluxos.empty:
                 # Conforme solicitado: Data/Hora e qual Fluxo utilizou (termo_pesquisado guarda o nome do fluxo)
