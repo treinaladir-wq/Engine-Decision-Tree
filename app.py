@@ -203,77 +203,94 @@ elif st.session_state.pagina_atual == "Fluxos":
                 if st.button("🔄 Reiniciar"): st.session_state.step = str(f_res.data[0]['id']); st.rerun()
 
 elif st.session_state.pagina_atual == "Gestao":
-    if st.button("⬅️ Voltar"): st.session_state.pagina_atual = "Hub"; st.rerun()
+    if st.button("⬅️ Voltar"): 
+        st.session_state.pagina_atual = "Hub"
+        st.rerun()
+    
+    # Campo de senha para proteger a área
     if st.text_input("Senha Admin:", type="password") == ADMIN_PW:
+        # Criamos as abas de organização
         g_tab = st.tabs(["📊 Dashboard", "📥 Relatórios", "🚀 Upload", "🔥 Fluxos"])
-        logs = supabase.table("logs_pesquisa").select("*").order("data_hora", desc=True).execute()
-        df_l = pd.DataFrame(logs.data) if logs.data else pd.DataFrame()
-        with g_tab[0]: # BI
+        
+        # 1. ABA DE DASHBOARD (Gráficos)
+        with g_tab[0]:
             logs_res = supabase.table("logs_pesquisa").select("*").order("data_hora", desc=True).execute()
             if logs_res.data:
                 df_l = pd.DataFrame(logs_res.data)
-            if not df_l.empty:
                 c1, c2 = st.columns(2)
                 c1.plotly_chart(px.pie(df_l, names='aba_utilizada', title="Uso por Categoria"), use_container_width=True)
-                top = df_l[df_l['aba_utilizada'] != 'Fluxos']['termo_pesquisado'].value_counts().nlargest(10).reset_index()
-                c2.plotly_chart(px.bar(top, x='count', y='termo_pesquisado', orientation='h', title="Top 10 Buscas"), use_container_width=True)
-                # --- BLOCO DE EXPORTAÇÃO DETALHADA (Adicionar na aba Gestao) ---
-st.subheader("📥 Extração de Dados para Auditoria")
+                
+                # Filtra apenas buscas manuais para o gráfico de barras
+                df_buscas = df_l[df_l['aba_utilizada'] != 'Fluxos']
+                if not df_buscas.empty:
+                    top = df_buscas['termo_pesquisado'].value_counts().nlargest(10).reset_index()
+                    c2.plotly_chart(px.bar(top, x='count', y='termo_pesquisado', orientation='h', title="Top 10 Buscas"), use_container_width=True)
+            else:
+                st.info("Aguardando dados de uso para gerar gráficos.")
 
-# 1. Recupera todos os logs do banco de dados
-logs_res = supabase.table("logs_pesquisa").select("*").order("data_hora", desc=True).execute()
+        # 2. ABA DE RELATÓRIOS (Exportação que você pediu)
+        with g_tab[1]:
+            st.subheader("📥 Extração de Dados para Auditoria")
+            logs_res = supabase.table("logs_pesquisa").select("*").order("data_hora", desc=True).execute()
+            
+            if logs_res.data:
+                df_exp = pd.DataFrame(logs_res.data)
+                df_exp['data_hora'] = pd.to_datetime(df_exp['data_hora']).dt.strftime('%d/%m/%Y %H:%M')
+                
+                output = io.BytesIO()
+                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                    # Aba 1: Pesquisas Manuais
+                    df_pesq = df_exp[df_exp['aba_utilizada'].isin(['Tags', 'N2'])]
+                    if not df_pesq.empty:
+                        df_pesq = df_pesq[['data_hora', 'usuario_email', 'aba_utilizada', 'termo_pesquisado']]
+                        df_pesq.columns = ['Data/Hora', 'Usuário', 'Onde Buscou', 'Termo Pesquisado']
+                        df_pesq.to_excel(writer, index=False, sheet_name='Buscas_Manuais')
+                    
+                    # Aba 2: Fluxogramas
+                    df_flu = df_exp[df_exp['aba_utilizada'] == 'Fluxos']
+                    if not df_flu.empty:
+                        df_flu = df_flu[['data_hora', 'usuario_email', 'termo_pesquisado', 'passo_fluxo', 'completou']]
+                        df_flu.columns = ['Data/Hora', 'Usuário', 'Nome do Fluxo', 'Último Passo', 'Completou?']
+                        df_flu.to_excel(writer, index=False, sheet_name='Uso_Fluxogramas')
 
-if logs_res.data:
-    df_l = pd.DataFrame(logs_res.data)
-    
-    # Tratamento de datas e colunas
-    df_l['data_hora'] = pd.to_datetime(df_l['data_hora']).dt.strftime('%d/%m/%Y %H:%M')
-    
-    # Preparação do arquivo Excel em memória
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        
-        # ABA 1: PESQUISAS (Tags e N2)
-        # Filtra apenas o que foi buscado nos manuais
-        df_pesquisas = df_l[df_l['aba_utilizada'].isin(['Tags', 'N2'])]
-        if not df_pesquisas.empty:
-            df_pesquisas = df_pesquisas[['data_hora', 'usuario_email', 'aba_utilizada', 'termo_pesquisado']]
-            df_pesquisas.columns = ['Data/Hora', 'Usuário', 'Onde Buscou', 'Termo Pesquisado']
-            df_pesquisas.to_excel(writer, index=False, sheet_name='Buscas_Manuais')
-        
-        # ABA 2: JORNADA FLUXOS
-        # Filtra apenas o comportamento nos guias de decisão
-        df_fluxos = df_l[df_l['aba_utilizada'] == 'Fluxos']
-        if not df_fluxos.empty:
-            df_fluxos = df_fluxos[['data_hora', 'usuario_email', 'termo_pesquisado', 'passo_fluxo', 'completou']]
-            df_fluxos.columns = ['Data/Hora', 'Usuário', 'Nome do Fluxo', 'Último Passo Lido', 'Chegou ao Fim?']
-            df_fluxos.to_excel(writer, index=False, sheet_name='Uso_Fluxogramas')
+                st.info("O arquivo contém abas separadas para Tags/N2 e para Fluxogramas.")
+                st.download_button(
+                    label="📥 Baixar Relatório Excel Detalhado",
+                    data=output.getvalue(),
+                    file_name=f"LOGS_USO_CNX_{datetime.now().strftime('%d_%m_%Y')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+            else:
+                st.warning("Sem dados para exportar.")
 
-    # Botão de Download
-    st.info("O arquivo contém abas separadas para buscas manuais e uso de fluxogramas.")
-    st.download_button(
-        label="📥 Baixar Relatório Excel Detalhado",
-        data=output.getvalue(),
-        file_name=f"LOGS_USO_CNX_{datetime.now().strftime('%d_%m_%Y')}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-else:
-    st.warning("Não existem registros de log para exportar no momento.")
-        with g_tab[2]: # UPLOAD
+        # 3. ABA DE UPLOAD
+        with g_tab[2]:
             tipo = st.radio("Base:", ["Tags CRM", "Book N2", "Fluxogramas"])
-            arq = st.file_uploader("Arquivo")
-            if arq and st.button("Salvar"):
+            arq = st.file_uploader("Arquivo", type=['csv', 'xlsx'])
+            if arq and st.button("Salvar Dados"):
                 df_u = pd.read_csv(arq) if arq.name.endswith('.csv') else pd.read_excel(arq)
                 if tipo == "Fluxogramas":
-                    nome = st.text_input("Nome do Tema:")
-                    if nome:
-                        supabase.table("fluxos").delete().eq("tema", nome).execute()
+                    nome_tema = st.text_input("Confirme o nome do tema:")
+                    if nome_tema:
+                        supabase.table("fluxos").delete().eq("tema", nome_tema).execute()
                         for _, row in df_u.iterrows():
                             opts = {str(row.iloc[i]): str(row.iloc[i+1]) for i in range(2, len(df_u.columns)-1, 2) if str(row.iloc[i]) != "nan"}
-                            supabase.table("fluxos").insert({"id": str(row['id']), "pergunta": str(row['pergunta']), "tema": nome, "opcoes": opts}).execute()
+                            supabase.table("fluxos").insert({"id": str(row['id']), "pergunta": str(row['pergunta']), "tema": nome_tema, "opcoes": opts}).execute()
                         st.success("Fluxo Atualizado!")
                 else:
                     target = "book_tags" if tipo == "Tags CRM" else "book_n2"
                     supabase.table(target).delete().neq("id", -1).execute()
                     supabase.table(target).insert(df_u.to_dict(orient='records')).execute()
-                    st.success("Base atualizada!")
+                    st.success(f"Base de {tipo} atualizada!")
+
+        # 4. ABA DE GERENCIAR FLUXOS
+        with g_tab[3]:
+            st.subheader("Excluir Temas")
+            res_f = supabase.table("fluxos").select("tema").execute()
+            temas_lista = sorted(list(set([i['tema'] for i in res_f.data]))) if res_f.data else []
+            if temas_lista:
+                tema_del = st.selectbox("Selecione para excluir:", temas_lista)
+                if st.button("🔥 Confirmar Exclusão"):
+                    supabase.table("fluxos").delete().eq("tema", tema_del).execute()
+                    st.success(f"Tema {tema_del} removido.")
+                    st.rerun()
