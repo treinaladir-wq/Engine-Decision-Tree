@@ -209,11 +209,56 @@ elif st.session_state.pagina_atual == "Gestao":
         logs = supabase.table("logs_pesquisa").select("*").order("data_hora", desc=True).execute()
         df_l = pd.DataFrame(logs.data) if logs.data else pd.DataFrame()
         with g_tab[0]: # BI
+            logs_res = supabase.table("logs_pesquisa").select("*").order("data_hora", desc=True).execute()
+            if logs_res.data:
+                df_l = pd.DataFrame(logs_res.data)
             if not df_l.empty:
                 c1, c2 = st.columns(2)
                 c1.plotly_chart(px.pie(df_l, names='aba_utilizada', title="Uso por Categoria"), use_container_width=True)
                 top = df_l[df_l['aba_utilizada'] != 'Fluxos']['termo_pesquisado'].value_counts().nlargest(10).reset_index()
                 c2.plotly_chart(px.bar(top, x='count', y='termo_pesquisado', orientation='h', title="Top 10 Buscas"), use_container_width=True)
+                # --- BLOCO DE EXPORTAÇÃO DETALHADA (Adicionar na aba Gestao) ---
+st.subheader("📥 Extração de Dados para Auditoria")
+
+# 1. Recupera todos os logs do banco de dados
+logs_res = supabase.table("logs_pesquisa").select("*").order("data_hora", desc=True).execute()
+
+if logs_res.data:
+    df_l = pd.DataFrame(logs_res.data)
+    
+    # Tratamento de datas e colunas
+    df_l['data_hora'] = pd.to_datetime(df_l['data_hora']).dt.strftime('%d/%m/%Y %H:%M')
+    
+    # Preparação do arquivo Excel em memória
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        
+        # ABA 1: PESQUISAS (Tags e N2)
+        # Filtra apenas o que foi buscado nos manuais
+        df_pesquisas = df_l[df_l['aba_utilizada'].isin(['Tags', 'N2'])]
+        if not df_pesquisas.empty:
+            df_pesquisas = df_pesquisas[['data_hora', 'usuario_email', 'aba_utilizada', 'termo_pesquisado']]
+            df_pesquisas.columns = ['Data/Hora', 'Usuário', 'Onde Buscou', 'Termo Pesquisado']
+            df_pesquisas.to_excel(writer, index=False, sheet_name='Buscas_Manuais')
+        
+        # ABA 2: JORNADA FLUXOS
+        # Filtra apenas o comportamento nos guias de decisão
+        df_fluxos = df_l[df_l['aba_utilizada'] == 'Fluxos']
+        if not df_fluxos.empty:
+            df_fluxos = df_fluxos[['data_hora', 'usuario_email', 'termo_pesquisado', 'passo_fluxo', 'completou']]
+            df_fluxos.columns = ['Data/Hora', 'Usuário', 'Nome do Fluxo', 'Último Passo Lido', 'Chegou ao Fim?']
+            df_fluxos.to_excel(writer, index=False, sheet_name='Uso_Fluxogramas')
+
+    # Botão de Download
+    st.info("O arquivo contém abas separadas para buscas manuais e uso de fluxogramas.")
+    st.download_button(
+        label="📥 Baixar Relatório Excel Detalhado",
+        data=output.getvalue(),
+        file_name=f"LOGS_USO_CNX_{datetime.now().strftime('%d_%m_%Y')}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+else:
+    st.warning("Não existem registros de log para exportar no momento.")
         with g_tab[2]: # UPLOAD
             tipo = st.radio("Base:", ["Tags CRM", "Book N2", "Fluxogramas"])
             arq = st.file_uploader("Arquivo")
