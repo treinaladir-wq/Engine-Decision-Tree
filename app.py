@@ -95,25 +95,17 @@ try:
 except:
     st.error("Erro de conexão."); st.stop()
 
-# --- 3. LOGS (VERSÃO DIAGNÓSTICO) ---
+# --- 3. LOGS (VERSÃO BLINDADA) ---
 def registrar_log(termo, aba, passo="n/a", completou=False):
     email = st.session_state.get('user_email', 'n/a')
     log_data = {
         "usuario_email": email, 
         "termo_pesquisado": str(termo), 
         "aba_utilizada": str(aba), 
-        "passo_fluxo": str(passo), 
-        "completou": bool(completou)
+        "passo_fluxo": str(passo)
+        # Remova temporariamente a linha do 'completou' se o erro persistir
     }
-    try:
-        # Tenta inserir no Supabase
-        res = supabase.table("logs_pesquisa").insert(log_data).execute()
-        # Se você quiser ver se está funcionando no modo desenvolvedor, 
-        # pode descomentar a linha abaixo temporariamente:
-        # st.toast(f"Log registrado: {aba}") 
-    except Exception as e:
-        # Se houver erro, ele mostrará na tela para você saber o que é
-        st.error(f"Erro ao salvar log: {e}")
+    # ... resto da função
 
 # --- 4. ESTADO E LOGIN ---
 if 'logged_in' not in st.session_state: st.session_state.logged_in = False
